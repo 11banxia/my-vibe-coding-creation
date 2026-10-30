@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>今日待办</title>
+<style>
+  :root {
+    --cream: #FBF5EE;      /* 奶油底色 */
+    --coffee: #8B5A3C;     /* 咖色 */
+    --coffee-deep: #5B3E2E;/* 深咖文字 */
+    --pink: #F2A9B8;       /* 粉色 */
+    --pink-light: #FBE3E8; /* 浅粉 */
+    --line: #EADFD3;       /* 分隔线 */
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    background: var(--cream);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Yuanti SC", "YouYuan", "幼圆", sans-serif;
+    color: var(--coffee-deep);
+    display: flex;
+    justify-content: center;
+    padding: 48px 20px 24px;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+  }
+
+  /* 手绘波浪边框（整圈歪扭波浪线，四角缠绕线团） */
+  .frame {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .frame svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 460px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* 标题 */
+  h1 {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--coffee-deep);
+    margin-bottom: 28px;
+  }
+
+  /* 待办列表 */
+  .list {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 40px;
+  }
+
+  /* 每一项：外层裁剪，容纳左滑露出的删除按钮 */
+  .todo-wrap {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
+  }
+
+  /* 删除按钮，藏在右侧 */
+  .delete {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: 82px;
+    border: none;
+    border-radius: 18px;
+    background: var(--pink);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* 待办卡片主体，可左滑 */
+  .todo {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: 18px;
+    padding: 16px 18px;
+    cursor: grab;
+    touch-action: pan-y;
+    transition: transform .28s cubic-bezier(.22,1,.36,1);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* 圆圈 */
+  .circle {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2.5px solid var(--pink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background .2s, border-color .2s;
+  }
+
+  .circle svg {
+    width: 16px;
+    height: 16px;
+    opacity: 0;
+    transform: scale(.4);
+    transition: opacity .18s, transform .18s;
+  }
+
+  /* 文字 */
+  .todo .text {
+    flex: 1;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--coffee-deep);
+    word-break: break-word;
+    outline: none;
+  }
+
+  /* 占位提示文字（待填写） */
+  .todo .text.placeholder {
+    color: #cbbcad;
+  }
+
+  /* 完成态 */
+  .todo.done .circle {
+    background: var(--pink);
+    border-color: var(--pink);
+  }
+  .todo.done .circle svg {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .todo.done .text {
+    color: #b8a99b;
+    text-decoration: line-through;
+  }
+
+  /* 猫猫区域 */
+  .cat {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    transition: transform .15s;
+  }
+  .cat:active { transform: scale(.96); }
+
+  .cat svg { display: block; }
+
+  .cat .hint {
+    margin-top: 6px;
+    font-size: 13px;
+    color: #b8a99b;
+    letter-spacing: 1px;
+  }
+
+  /* 尊重减弱动效偏好 */
+  @media (prefers-reduced-motion: reduce) {
+    .todo, .circle svg, .cat { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <svg viewBox="0 0 400 800" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- 手绘波浪边框，整圈歪扭自然 -->
+      <path d="M60 40
+               C 120 28, 200 52, 280 34
+               C 330 26, 360 38, 360 60
+               C 372 120, 356 200, 368 280
+               C 376 340, 360 380, 360 400
+               C 356 420, 372 460, 366 520
+               C 360 580, 372 640, 364 700
+               C 358 740, 362 760, 340 766
+               C 280 778, 200 754, 120 770
+               C 70 780, 44 770, 40 748
+               C 30 700, 44 640, 34 580
+               C 26 520, 40 460, 34 400
+               C 30 360, 42 320, 36 280
+               C 30 200, 42 120, 34 80
+               C 30 56, 44 44, 60 40 Z"
+            fill="none" stroke="#8B5A3C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <!-- 四角缠绕线团（加重的小结） -->
+      <!-- 左上 -->
+      <g fill="none" stroke="#8B5A3C" stroke-width="2.5" stroke-linecap="round">
+        <path d="M44 52 C 58 44, 70 58, 56 70 C 44 80, 36 66, 48 56"/>
+        <path d="M56 48 C 70 56, 64 72, 50 72"/>
+        <path d="M48 60 C 56 56, 66 64, 60 72"/>
+      </g>
+      <!-- 右上 -->
+      <g fill="none" stroke="#8B5A3C" stroke-width="2.5" stroke-linecap="round">
+        <path d="M356 52 C 342 44, 330 58, 344 70 C 356 80, 364 66, 352 56"/>
+        <path d="M344 48 C 330 56, 336 72, 350 72"/>
+        <path d="M352 60 C 344 56, 334 64, 340 72"/>
+      </g>
+      <!-- 左下 -->
+      <g fill="none" stroke="#8B5A3C" stroke-width="2.5" stroke-linecap="round">
+        <path d="M44 748 C 58 756, 70 742, 56 730 C 44 720, 36 734, 48 744"/>
+        <path d="M56 752 C 70 744, 64 728, 50 728"/>
+        <path d="M48 740 C 56 744, 66 736, 60 728"/>
+      </g>
+      <!-- 右下 -->
+      <g fill="none" stroke="#8B5A3C" stroke-width="2.5" stroke-linecap="round">
+        <path d="M356 748 C 342 756, 330 742, 344 730 C 356 720, 364 734, 352 744"/>
+        <path d="M344 752 C 330 744, 336 728, 350 728"/>
+        <path d="M352 740 C 344 744, 334 736, 340 728"/>
+      </g>
+    </svg>
+  </div>
+
+  <div class="app">
+    <h1>今日待办</h1>
+
+    <div class="list" id="list">
+      <div class="todo-wrap">
+        <button class="delete" aria-label="删除">删除</button>
+        <div class="todo">
+          <div class="circle" role="checkbox" aria-checked="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+          </div>
+          <div class="text placeholder" contenteditable="true">待填写</div>
+        </div>
+      </div>
+
+      <div class="todo-wrap">
+        <button class="delete" aria-label="删除">删除</button>
+        <div class="todo">
+          <div class="circle" role="checkbox" aria-checked="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+          </div>
+          <div class="text placeholder" contenteditable="true">待填写</div>
+        </div>
+      </div>
+
+      <div class="todo-wrap">
+        <button class="delete" aria-label="删除">删除</button>
+        <div class="todo">
+          <div class="circle" role="checkbox" aria-checked="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+          </div>
+          <div class="text placeholder" contenteditable="true">待填写</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cat" id="cat" role="button" aria-label="添加待办" tabindex="0">
+      <svg width="200" height="150" viewBox="0 0 200 150" xmlns="http://www.w3.org/2000/svg">
+        <!-- 尾巴：从身体右侧伸出，末端绕一圈圈住加号 -->
+        <path d="M160 118 C 190 112, 200 86, 190 66 C 184 54, 172 50, 164 56"
+              fill="none" stroke="#8B5A3C" stroke-width="10" stroke-linecap="round"/>
+        <!-- 趴着的身体 -->
+        <ellipse cx="105" cy="122" rx="62" ry="26" fill="#8B5A3C"/>
+        <!-- 前爪，向前伸 -->
+        <ellipse cx="62" cy="128" rx="16" ry="9" fill="#8B5A3C"/>
+        <ellipse cx="92" cy="130" rx="15" ry="9" fill="#8B5A3C"/>
+        <!-- 后爪 -->
+        <ellipse cx="150" cy="130" rx="16" ry="9" fill="#8B5A3C"/>
+        <!-- 头，枕在前爪上 -->
+        <circle cx="70" cy="92" r="32" fill="#8B5A3C"/>
+        <!-- 耳朵 -->
+        <path d="M46 68 L40 40 L64 58 Z" fill="#8B5A3C"/>
+        <path d="M94 68 L100 40 L76 58 Z" fill="#8B5A3C"/>
+        <path d="M50 62 L47 46 L61 56 Z" fill="#F2A9B8"/>
+        <path d="M90 62 L93 46 L79 56 Z" fill="#F2A9B8"/>
+        <!-- 脸 -->
+        <ellipse cx="70" cy="96" rx="20" ry="16" fill="#FBE3E8"/>
+        <!-- 闭着的眼睛（趴着打盹，更软萌） -->
+        <path d="M59 90 Q 63 94 67 90" fill="none" stroke="#5B3E2E" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M73 90 Q 77 94 81 90" fill="none" stroke="#5B3E2E" stroke-width="2.4" stroke-linecap="round"/>
+        <!-- 鼻子与嘴 -->
+        <path d="M68 97 L72 97 L70 100 Z" fill="#F2A9B8"/>
+        <path d="M70 100 Q 65 105 60 102" fill="none" stroke="#5B3E2E" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M70 100 Q 75 105 80 102" fill="none" stroke="#5B3E2E" stroke-width="1.6" stroke-linecap="round"/>
+        <!-- 腮红 -->
+        <circle cx="55" cy="99" r="5" fill="#F2A9B8" opacity=".55"/>
+        <circle cx="85" cy="99" r="5" fill="#F2A9B8" opacity=".55"/>
+        <!-- 加号，被尾巴圈住 -->
+        <circle cx="178" cy="80" r="17" fill="#F2A9B8"/>
+        <path d="M178 72 L178 88 M170 80 L186 80" stroke="#fff" stroke-width="3.6" stroke-linecap="round"/>
+      </svg>
+      <span class="hint">点猫猫添加待办</span>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const list = document.getElementById('list');
+  const cat = document.getElementById('cat');
+
+  // —— 新增一项 ——
+  function addTodo() {
+    const wrap = document.createElement('div');
+    wrap.className = 'todo-wrap';
+    wrap.innerHTML =
+      '<button class="delete" aria-label="删除">删除</button>' +
+      '<div class="todo">' +
+        '<div class="circle" role="checkbox" aria-checked="false">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>' +
+        '</div>' +
+        '<div class="text placeholder" contenteditable="true">待填写</div>' +
+      '</div>';
+    list.appendChild(wrap);
+  }
+
+  // —— 点圆圈：切换完成（事件委托，一次绑定永久有效）——
+  list.addEventListener('click', function (e) {
+    const circle = e.target.closest('.circle');
+    if (circle) {
+      const todo = circle.closest('.todo');
+      todo.classList.toggle('done');
+      const done = todo.classList.contains('done');
+      circle.setAttribute('aria-checked', done);
+      return;
+    }
+    const del = e.target.closest('.delete');
+    if (del) {
+      del.closest('.todo-wrap').remove();
+    }
+  });
+
+  // —— 左滑删除（事件委托 + Pointer 事件，支持鼠标和触屏）——
+  let startX = 0, startY = 0, current = null, offset = 0, dragging = false, horizontal = false;
+
+  list.addEventListener('pointerdown', function (e) {
+    const todo = e.target.closest('.todo');
+    if (!todo) return;
+    // 点在圆圈或删除按钮上，不做拖拽
+    if (e.target.closest('.circle') || e.target.closest('.delete')) return;
+    // 点在可编辑文字上，若想编辑则允许点击；拖拽交给移动判断
+    current = todo;
+    startX = e.clientX;
+    startY = e.clientY;
+    offset = 0;
+    dragging = false;
+    horizontal = false;
+    todo.style.transition = 'none';
+  });
+
+  list.addEventListener('pointermove', function (e) {
+    if (!current) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (!horizontal) {
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) {
+        horizontal = true;
+        dragging = true;
+      } else if (Math.abs(dy) > Math.abs(dx)) {
+        current = null; // 垂直滚动，放弃
+        return;
+      } else {
+        return;
+      }
+    }
+    if (dragging) {
+      e.preventDefault();
+      let next = offset + dx;
+      next = Math.max(-82, Math.min(0, next));
+      current.style.transform = 'translateX(' + next + 'px)';
+    }
+  });
+
+  list.addEventListener('pointerup', function () {
+    if (!current) return;
+    current.style.transition = '';
+    if (dragging) {
+      const val = parseInt(current.style.transform.replace(/[^-\d]/g, '')) || 0;
+      const target = (val < -41) ? -82 : 0;
+      current.style.transform = 'translateX(' + target + 'px)';
+    }
+    current = null;
+    dragging = false;
+    horizontal = false;
+  });
+
+  // —— 编辑文字时复位左滑 ——
+  list.addEventListener('focusin', function (e) {
+    const todo = e.target.closest('.todo');
+    if (todo) todo.style.transform = 'translateX(0)';
+  });
+
+  // —— 点击占位文字「待填写」时自动清空，等待输入 ——
+  list.addEventListener('focusin', function (e) {
+    const text = e.target.closest('.text.placeholder');
+    if (text) {
+      text.textContent = '';
+      text.classList.remove('placeholder');
+    }
+  });
+
+  // —— 点猫猫添加新待办 ——
+  cat.addEventListener('click', addTodo);
+  cat.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      addTodo();
+    }
+  });
+})();
+</script>
+</body>
+</html>
